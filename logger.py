@@ -2,6 +2,7 @@ __author__ = 'Deepak Verma(verma.dverma.90@gmail.com)'
 import logging
 
 from logging import FileHandler, Formatter
+from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 import os
 import sys
 
@@ -43,17 +44,26 @@ logging_config = dict(
 
 
 logger_dict = {}
+root_logger_dict = {}
+MAX_FILE_SIZE = 1024*1024*512 #512 MB
+MAX_FILES = 1024
 class LegacyLogger(object):
-    def __init__(self, logger_name, fmt=None, log_dir=None):
+    def __init__(self, logger_name, fmt=None, log_dir=None, max_file_size=MAX_FILE_SIZE, max_files=MAX_FILES):
         self.logger_name = logger_name
-        self.logger = logging.getLogger(logger_name)
-        self.FORMAT = fmt
-        self.logdir = log_dir
-        if not self.logdir:
-            self.logdir = 'D:/'
-        if not self.FORMAT:
-            self.FORMAT = '%(levelname)s: %(filename)s: %(name)s: %(asctime)-15s: %(lineno)s:  %(message)s'
-        self.setConfig()
+        self.file_count = max_files
+        self.max_file_size = max_file_size
+        if logger_name in root_logger_dict:
+            self.root_logger = root_logger_dict[logger_name]
+        else:
+            self.root_logger = logging.getLogger(logger_name)
+            self.FORMAT = fmt
+            self.logdir = log_dir
+            if not self.logdir:
+                self.logdir = 'D:/'
+            if not self.FORMAT:
+                self.FORMAT = '%(levelname)s: %(filename)s: %(name)s: %(asctime)-15s: %(lineno)s:  %(message)s'
+            self.setConfig()
+        root_logger_dict.update({logger_name:self.root_logger})
 
     def __new__(cls, logger_name,  *args, **kwargs):
         logme = logger_dict.get(logger_name)
@@ -69,41 +79,37 @@ class LegacyLogger(object):
 
     def setConfig(self):
         self.LOG_FILENAME = os.path.join(self.logdir, self.logger_name+'.log')
-        if getPYVERSION() >= '2.7':
-            logging.basicConfig(filename=self.LOG_FILENAME,
-                        level=logging.DEBUG,
-                        format=self.FORMAT
-                       )
-        else:
-            hdlr = self.getHandler()
-            fmtr = Formatter(self.FORMAT)
-            hdlr.setFormatter(fmtr)
-            self.logger.addHandler(hdlr)
-            self.setLevel(logging.DEBUG)
+        hdlr = self.getHandler()
+        fmtr = Formatter(self.FORMAT)
+        hdlr.setFormatter(fmtr)
+        self.root_logger.addHandler(hdlr)
+        self.root_logger.setLevel(logging.DEBUG)
 
     def getHandler(self):
-        return FileHandler(filename=self.LOG_FILENAME)
+        #return FileHandler(filename=self.LOG_FILENAME)
+        return RotatingFileHandler(filename=self.LOG_FILENAME, maxBytes=self.max_file_size, backupCount=self.max_file_size)
 
     def setLevel(self, level):
-        self.logger.setLevel(level)
+        self.root_logger.setLevel(level)
 
     def DEBUG(self, message):
-        self.logger.debug(message)
+        print 'calling'
+        self.root_logger.debug(message)
 
     def INFO(self, message):
-        self.logger.info(message)
+        self.root_logger.info(message)
 
     def WARNING(self, message):
-        self.logger.warning(message)
+        self.root_logger.warning(message)
 
     def ERROR(self, message):
-        self.logger.error(message)
+        self.root_logger.error(message)
 
     def CRITICAL(self, message):
-        self.logger.critical(message)
+        self.root_logger.critical(message)
 
     def EXCEPTION(self, message):
-        self.logger.exception(message)
+        self.root_logger.exception(message)
 
 
 def log_this_message(logger_name, log_level, message, log_dir=None, fmt=None):
@@ -118,6 +124,8 @@ def log_this_message(logger_name, log_level, message, log_dir=None, fmt=None):
     """
     logger = LegacyLogger(logger_name, fmt, log_dir)
     getattr(logger, log_level.upper())(message)
+
+
 
 if __name__=="__main__":
     ags = sys.argv[1:]
